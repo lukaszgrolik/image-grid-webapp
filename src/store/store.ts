@@ -2,13 +2,13 @@ import { action, computed, makeObservable, observable } from "mobx";
 
 type RGB = [number, number, number];
 
-interface ApiImagesResponse {
+export interface ApiImagesResponse {
     imagePath: string;
     colorthief: {
         color: RGB;
         palette: RGB[];
     };
-    vibrant: {
+    vibrantPalette: {
         Vibrant: RGB;
         Muted: RGB;
         DarkVibrant: RGB;
@@ -21,7 +21,7 @@ interface ApiImagesResponse {
 export async function fetchImages() {
     const data = await (await fetch('http://localhost:3110/images')).json();
 
-    return data as ApiImagesResponse;
+    return data as ApiImagesResponse[];
 }
 
 export class Store {
@@ -88,8 +88,10 @@ function rgb2hsl(r: number, g: number, b: number): Rgb2hslResult {
 export class Color {
     static fromRGB(r: number, g: number, b: number) {
         const c = new Color();
-        const { h, s, l } = rgb2hsl(r, g, b);
 
+        c.setRGB(r, g, b);
+
+        const { h, s, l } = rgb2hsl(r, g, b);
         c.setHSL(h, s, l);
 
         return c;
@@ -97,7 +99,11 @@ export class Color {
 
     static fromHSL(h: number, s: number, l: number) {
         const c = new Color();
+
         c.setHSL(h, s, l);
+
+        // const {r, g, b} = hsl2rgb(h, s, l);
+        // c.setRGB(r, g, b);
 
         return c;
     }
@@ -107,21 +113,35 @@ export class Color {
     s = 0;
     l = 0;
 
-    setHSL(h: number, s: number, l: number) {
+    r = 0;
+    g = 0;
+    b = 0;
+
+    private setHSL(h: number, s: number, l: number) {
         this.h = h;
         this.s = s;
         this.l = l;
     }
+
+    private setRGB(r: number, g: number, b: number) {
+        this.r = r;
+        this.g = g;
+        this.b = b;
+    }
+
+    cssHsl(): string {
+        return `hsl(${this.h}, ${this.s * 100}%, ${this.l * 100}%)`;
+    }
 }
 
-class Image {
+export class Image {
     readonly imagePath: string;
     readonly colorthief: {
         color: Color;
         palette: Color[];
     };
-    readonly vibrant: {
-        [K in keyof ApiImagesResponse['vibrant']]: Color;
+    readonly vibrantPalette: {
+        [K in keyof ApiImagesResponse['vibrantPalette']]: Color;
     };
 
     constructor(body: ApiImagesResponse) {
@@ -131,8 +151,8 @@ class Image {
             palette: body.colorthief.palette.map(c => Color.fromRGB(...c))
         };
 
-        const vibrantEntries = Object.entries(body.vibrant).map(([mode, c]) => [mode, Color.fromRGB(...c)]);
-        this.vibrant = Object.fromEntries(vibrantEntries);
+        const vibrantEntries = Object.entries(body.vibrantPalette).map(([mode, c]) => [mode, Color.fromRGB(...c)]);
+        this.vibrantPalette = Object.fromEntries(vibrantEntries);
     }
 
     get imageUrl() {

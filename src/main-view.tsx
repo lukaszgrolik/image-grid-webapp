@@ -6,95 +6,90 @@ import styled from '@emotion/styled';
 import { makeNoise2D } from "open-simplex-noise";
 
 import * as Store from './store/store';
-
-
+import { assignToGrid, genNoiseGrid } from './utilts';
 
 function randomRange(a: number, b: number) {
     return a + Math.floor(Math.random() * (b - a));
 }
 
-abstract class Tile {
-    // abstract get color(): string;
+interface NoiseGridConfig {
+    gridSize: { x: number; y: number };
+    tileSize: number;
+    noiseGrid: number[][];
+    images: Store.Image[];
+    colorMode: keyof Store.ApiImagesResponse['vibrantPalette'];
 }
 
-class ColorTile extends Tile {
-    readonly h: number;
-    readonly s: number;
-    readonly l: number;
+class NoiseGrid {
+    readonly imagesGrid: Store.Image[][];
 
-    constructor(opts: {h: number, s: number, l: number}) {
-        super();
-
-        this.h = opts.h;
-        this.s = opts.s;
-        this.l = opts.l;
+    constructor(readonly config: NoiseGridConfig) {
+        this.imagesGrid = assignToGrid({
+            grid: config.noiseGrid,
+            list: config.images,
+            sortBy: img => img.vibrantPalette[config.colorMode].r,
+        }).grid;
     }
 
-    get color() {
-        return `hsl(${this.h}, ${this.s * 100}%, ${this.l * 100}%)`;
-    }
 }
 
-class ImageTile extends Tile {
-    // constructor() {
+const GridTileImage: React.FC<{ grid: NoiseGrid, image: Store.Image; noiseValue: number; color?: boolean; }> = observer(props => {
+    const { grid, image, noiseValue, color } = props;
 
-    // }
-
-    // get color() {
-
-    // }
-}
-
-const config = {
-    gridSize: { x: 10, y: 5 },
-    tileSize: 100,
-};
-
-const colors = new Array(config.gridSize.x * config.gridSize.y).fill(undefined).map(() => {
-    // return `hsl(${randomRange(0, 360)}, 50%, 50%)`;
-    return Store.Color.fromHSL(randomRange(0, 360), .5, .5);
-});
-
-const noise2D = makeNoise2D(1);
-
-const freq = .1;
-const valuesGrid = new Array(config.gridSize.x).fill(undefined).map((_, x) => {
-    return new Array(config.gridSize.y).fill(undefined).map((_, y) => {
-        const val = (noise2D(x * freq, y * freq) + 1) / 2;
-        return {id: `${x}x${y}`, value: val};
-    });
-});
-const valuesFlatSorted = valuesGrid.flat().sort((a, b) => a.value - b.value);
-
-const colorsSorted = colors.slice().sort((a, b) => a.h - b.h);
-const colorsByValue = Object.fromEntries(valuesFlatSorted.map((val, i) => {
-    return [val.id, colorsSorted[i]];
-}));
-
-const TilesGrid = observer(() => {
     return (
-        <div style={{ position: 'relative', height: config.gridSize.y * config.tileSize }}>
+        <div style={{
+            width: '100%',
+            height: '100%',
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            // objectFit: 'cover',
+            // objectPosition: 'center',
+            ...(color ? {
+                backgroundColor: image.vibrantPalette[grid.config.colorMode].cssHsl(),
+            } : {
+                backgroundImage: `url(${image.imageUrl})`,
+                backgroundPosition: 'center',
+                backgroundSize: 'cover'
+            })
+        }}>
+            {/* {noiseValue.toFixed(3)} */}
+            {/* <img
+                style={{
+                    width: '100%',
+                }}
+                src={}
+            /> */}
+        </div>
+    );
+});
+
+const TilesGrid: React.FC<{ grid: NoiseGrid, color?: boolean }> = observer(props => {
+    const {grid} = props;
+
+    return (
+        <div style={{ position: 'relative', height: grid.config.gridSize.y * grid.config.tileSize }}>
             {
-                new Array(config.gridSize.y).fill(undefined).map((_, y) => {
+                new Array(grid.config.gridSize.y).fill(undefined).map((_, y) => {
                     return (
                         <div key={y}>
                             {
-                                new Array(config.gridSize.x).fill(undefined).map((_, x) => {
-                                    const { tileSize } = config;
-                                    const value = valuesGrid[x][y];
-                                    const color = colorsByValue[value.id];
+                                new Array(grid.config.gridSize.x).fill(undefined).map((_, x) => {
+                                    const { tileSize } = grid.config;
+                                    const image = grid.imagesGrid[y][x];
+                                    const noiseValue = grid.config.noiseGrid[y][x];
 
                                     return (
                                         <div key={x}>
                                             <div style={{
-                                                // backgroundColor: `hsl(${randomRange(0, 360)}, 50%, 50%)`,
-                                                backgroundColor: `hsl(${color.h}, ${color.s * 100}%, ${color.l * 100}%)`,
                                                 width: tileSize,
                                                 height: tileSize,
                                                 position: 'absolute',
                                                 left: tileSize * x,
                                                 top: tileSize * y,
-                                            }}>{value.value.toFixed(3)}</div>
+                                            }}>
+                                                <GridTileImage grid={grid} image={image} noiseValue={noiseValue} color={props.color} />
+                                            </div>
                                         </div>
                                     );
                                 })
@@ -112,20 +107,56 @@ const Wrapper = styled.div`
 `;
 
 export const MainView: React.FC<{store: Store.Store}> = observer(({store}) => {
+    const [imageNoiseGrid, setImageNoiseGrid] = React.useState<NoiseGrid | null>(null);
+
     React.useEffect(() => {
         (async () => {
             const imagesData = await Store.fetchImages();
             console.log('imagesData', imagesData)
+
+            const imageNoiseGrid = (() => {
+                const noiseGrid = genNoiseGrid({
+                    sizeX: 10,
+                    sizeY: 5,
+                    seed: 1,
+                    freq: .05,
+                });
+                const gridCols = 10;
+                const gridRows = 5;
+                const gridCells = gridCols * gridRows;
+
+                if (gridCells > imagesData.length) throw new Error(`too few images (${imagesData.length} loaded, ${gridCells} needed)`);
+
+                const images = imagesData.slice(0, gridCells).map(img => {
+                    // return {imageUrl: img.imagePath, color: Store.Color.fromRGB(...img.vibrantPal.Vibrant)};
+                    return new Store.Image(img);
+                });
+                // console.log('images', images)
+
+                return new NoiseGrid({
+                    gridSize: { x: 10, y: 5 },
+                    tileSize: 100,
+                    noiseGrid,
+                    images,
+                    colorMode: 'Vibrant',
+                });
+            })();
+
+            setImageNoiseGrid(imageNoiseGrid);
         })();
     }, []);
 
     return (
         <Wrapper>
             <div>images</div>
-            <TilesGrid />
-
-            <div>colors</div>
-            <TilesGrid />
+            {
+                imageNoiseGrid
+                &&
+                <div>
+                    <TilesGrid grid={imageNoiseGrid} />
+                    <TilesGrid grid={imageNoiseGrid} color={true} />
+                </div>
+            }
         </Wrapper>
     );
 });
