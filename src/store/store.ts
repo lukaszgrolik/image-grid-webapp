@@ -1,25 +1,30 @@
 import { action, computed, makeObservable, observable } from "mobx";
 
 type RGB = [number, number, number];
+export type VibrantColorObj = {
+    hex: string;
+    rgb: RGB;
+    hsl: RGB;
+}
 
 export interface ApiImagesResponse {
-    imagePath: string;
+    path: string;
     colorthief: {
         color: RGB;
         palette: RGB[];
     };
-    vibrantPalette: {
-        Vibrant: RGB;
-        Muted: RGB;
-        DarkVibrant: RGB;
-        DarkMuted: RGB;
-        LightVibrant: RGB;
-        LightMuted: RGB;
+    vibrant: {
+        vibrant: VibrantColorObj;
+        muted: VibrantColorObj;
+        darkVibrant: VibrantColorObj;
+        darkMuted: VibrantColorObj;
+        lightVibrant: VibrantColorObj;
+        lightMuted: VibrantColorObj;
     };
 }
 
-export async function fetchImages() {
-    const data = await (await fetch('http://localhost:3110/images')).json();
+export async function fetchProjectImages(projectName: string) {
+    const data = await (await fetch(`http://localhost:3110/projects/${projectName}/images`)).json();
 
     return data as ApiImagesResponse[];
 }
@@ -140,22 +145,22 @@ export class Image {
         color: Color;
         palette: Color[];
     };
-    readonly vibrantPalette: {
-        [K in keyof ApiImagesResponse['vibrantPalette']]: Color;
+    readonly vibrant: {
+        [K in keyof ApiImagesResponse['vibrant']]: Color;
     };
 
-    constructor(body: ApiImagesResponse) {
-        this.imagePath = body.imagePath;
+    constructor(private readonly projectName: string, body: ApiImagesResponse) {
+        this.imagePath = body.path;
         this.colorthief = {
             color: Color.fromRGB(...body.colorthief.color),
             palette: body.colorthief.palette.map(c => Color.fromRGB(...c))
         };
 
-        const vibrantEntries = Object.entries(body.vibrantPalette).map(([mode, c]) => [mode, Color.fromRGB(...c)]);
-        this.vibrantPalette = Object.fromEntries(vibrantEntries);
+        const vibrantEntries = Object.entries(body.vibrant).map(([mode, c]) => [mode, Color.fromRGB(...c.rgb)]);
+        this.vibrant = Object.fromEntries(vibrantEntries);
     }
 
     get imageUrl() {
-        return `http://localhost:3110/assets${this.imagePath}`;
+        return `http://localhost:3110/assets/${this.projectName}${this.imagePath}`;
     }
 }
