@@ -1,6 +1,6 @@
 import * as React from 'react';
-import * as ReactDOM from 'react-dom';
-import { BrowserRouter, Link, NavLink, Route, Switch } from 'react-router-dom';
+import * as ReactDOM from 'react-dom/client';
+import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom';
 import styled from '@emotion/styled';
 
 import * as Store from './store/store';
@@ -55,7 +55,7 @@ const app = (
                     pages.map(page => {
                         return (
                             <li key={page.path}>
-                                <NavLink activeStyle={{ fontWeight: 'bold' }} to={page.path}>{page.label}</NavLink>
+                                <NavLink style={props => props.isActive ? { fontWeight: 'bold' } : {}} to={page.path}>{page.label}</NavLink>
                             </li>
                         );
                     })
@@ -63,23 +63,24 @@ const app = (
             </MainMenu>
 
             <Body>
-                <Switch>
+                <Routes>
                     {/* <Route path="/">
                         <MainView store={store} />
                     </Route> */}
                     {
-                        pages.map(page => {
-                            return (
-                                <Route key={page.path} path={page.path}>
-                                    <page.Component store={store} />
-                                </Route>
-                            )
-                        })
+                        // pages.map(page => {
+                        //     return (
+                        //         <Route key={page.path} path={page.path} element={<page.Component store={store} />} />
+                        //     )
+                        // })
                     }
-                </Switch>
+
+                    <Route path="/projects/:projectId" element={<MainView store={store} />} />
+                </Routes>
             </Body>
         </MainLayout>
     </BrowserRouter>
 );
 
-ReactDOM.render(app, document.getElementById('react-root'));
+const root = ReactDOM.createRoot(document.getElementById('react-root') as HTMLElement);
+root.render(app);

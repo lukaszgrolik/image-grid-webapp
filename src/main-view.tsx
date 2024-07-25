@@ -8,6 +8,11 @@ import { makeNoise2D } from "open-simplex-noise";
 import * as Store from './store/store';
 import { assignToGrid, genNoiseGrid } from './utilts';
 
+// @todo UI preview image colorAlgo colors
+// @todo test pure color images
+// @todo test greyscale images with colorfull images
+// @todo try get image colors with percentages (black, green, white, other), image brightness levels with percentages (white, black, grey, other)
+
 function randomRange(a: number, b: number) {
     return a + Math.floor(Math.random() * (b - a));
 }
@@ -77,11 +82,12 @@ const GridTileImage: React.FC<{ grid: NoiseGrid, image: Store.Image; noiseValue:
             ...(color ? {
                 backgroundColor: getColor(grid.config, image).cssHsl(),
             } : {
-                backgroundImage: `url(${image.imageUrl})`,
+                backgroundImage: `url("${image.imageUrl}")`,
                 backgroundPosition: 'center',
                 backgroundSize: 'cover'
             })
         }}>
+            {/* {image.imageUrl} */}
             {/* {noiseValue.toFixed(3)} */}
             {/* <img
                 style={{
@@ -137,15 +143,16 @@ async function loadProjectData(projectName: string) {
     const imagesData = await Store.fetchProjectImages(projectName);
     console.log('imagesData', projectName, imagesData)
 
-    const imageNoiseGrid = (() => {
+    const imageNoiseGrid = (colorAlgo: ColorAlgo) => {
+        const gridCols = 10;
+        // const gridRows = 5;
+        const gridRows = Math.floor(imagesData.length / gridCols);
         const noiseGrid = genNoiseGrid({
-            sizeX: 10,
-            sizeY: 5,
+            sizeX: gridCols,
+            sizeY: gridRows,
             seed: 1,
             freq: .05,
         });
-        const gridCols = 10;
-        const gridRows = 5;
         const gridCells = gridCols * gridRows;
 
         if (gridCells > imagesData.length) throw new Error(`too few images (${imagesData.length} loaded, ${gridCells} needed)`);
@@ -157,56 +164,116 @@ async function loadProjectData(projectName: string) {
         // console.log('images', images)
 
         return new NoiseGrid({
-            gridSize: { x: 10, y: 5 },
+            gridSize: { x: gridCols, y: gridRows },
             tileSize: 100,
             border: 10,
             noiseGrid,
             images,
-            colorAlgo: 'vibrant/dark_vibrant',
+            // colorAlgo: 'vibrant/dark_vibrant',
+            colorAlgo: colorAlgo,
             colorProp: 'l',
         });
-    })();
+    };
 
-    return imageNoiseGrid;
+    return (Object.keys(colorAlgos) as ColorAlgo[]).map(colorAlgo => {
+        return imageNoiseGrid(colorAlgo);
+    })
 }
 
 const Wrapper = styled.div`
 
 `;
+const TopBar = styled.div`
+    background-color: #eee;
+    padding: 1em;
+`;
+
+const ContentWrapper = styled.div`
+    display: flex;
+    /* gap: 1em; */
+`;
 
 export const MainView: React.FC<{store: Store.Store}> = observer(({store}) => {
     const [grids, setGrids] = React.useState<NoiseGrid[]>([]);
+    const [projectNames, setProjectNames] = React.useState<string[]>([]);
+    const [colorMode, setColorMode] = React.useState<boolean>(false);
+    const params = useParams<{ projectId: string }>();
+
+    console.log("params", params)
 
     React.useEffect(() => {
         (async () => {
-            const projects = [
-                'flowers',
-                'test2',
-            ];
+            // const projects = [
+            //     'flowers',
+            //     'test2',
+            // ];
 
-            const res_grids = await Promise.all(projects.map(p => {
-                return loadProjectData(p);
-            }));
+            // const res_grids = await Promise.all(projects.map(p => {
+            //     return loadProjectData(p);
+            // }));
 
-            setGrids(res_grids);
+            const projectsData = await Store.fetchProjects();
+
+            setProjectNames(projectsData);
+
+            if (params.projectId) {
+                const res_grids = await loadProjectData(params.projectId);
+
+                setGrids(res_grids);
+            }
+
         })();
     }, []);
 
+    React.useEffect(() => {
+        (async () => {
+            if (params.projectId) {
+                const res_grids = await loadProjectData(params.projectId);
+
+                setGrids(res_grids);
+            }
+
+        })();
+    }, [params.projectId]);
+
     return (
         <Wrapper>
-            {
-                grids.map((grid, i) => {
-                    return (
-                        <div key={i}>
-                            <TilesGrid grid={grid} />
-                            <div style={{height: 10}}></div>
+            <TopBar style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                <button onClick={() => {
+                    setColorMode(!colorMode);
+                }}>{colorMode ? 'colors' : 'pictures'}</button>
+            </TopBar>
 
-                            <TilesGrid grid={grid} color={true} />
-                            <div style={{ height: 10 }}></div>
-                        </div>
-                    );
-                })
-            }
+            <ContentWrapper>
+                <div>
+                    <ul>
+                        {
+                            projectNames.map(projectName => {
+                                return (
+                                    <li key={projectName}>
+                                        <NavLink style={props => props.isActive ? { fontWeight: 'bold' } : {}} to={`/projects/${projectName}`}>{projectName}</NavLink>
+                                    </li>
+                                )
+                            })
+                        }
+                    </ul>
+                </div>
+                <div style={{padding: '2em'}}>
+                    <div style={{marginTop: '2em'}}>
+                        {
+                            grids.map((grid, i) => {
+                                return (
+                                    <div key={i}>
+                                        <div style={{marginBottom: '1em'}}>{grid.config.colorAlgo}</div>
+                                        <TilesGrid grid={grid} color={colorMode} />
+                                        <div style={{height: '2em'}}></div>
+                                    </div>
+                                );
+                            })
+                        }
+                    </div>
+                </div>
+            </ContentWrapper>
         </Wrapper>
     );
 });

@@ -23,6 +23,12 @@ export interface ApiImagesResponse {
     };
 }
 
+export async function fetchProjects() {
+    const data = await (await fetch(`http://localhost:3110/projects`)).json();
+
+    return data as string[];
+}
+
 export async function fetchProjectImages(projectName: string) {
     const data = await (await fetch(`http://localhost:3110/projects/${projectName}/images`)).json();
 
