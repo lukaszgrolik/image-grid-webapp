@@ -1,4 +1,5 @@
 import { makeNoise2D } from "open-simplex-noise";
+import * as Store from "./store/store";
 
 interface GenNoiseGridOpts {
     sizeX: number;
@@ -64,4 +65,54 @@ export function assignToGrid<T>(opts: AssignToGridOpts<T>): AssignToGridResult<T
         list: resList,
         grid: resGrid,
     };
+}
+
+export type ColorAlgo = 'colorthief/color' |
+    'colorthief_palette/1' | 'colorthief_palette/2' | 'colorthief_palette/3' | 'colorthief_palette/4' | 'colorthief_palette/5' | 'colorthief_palette/6' |
+    'vibrant/vibrant' | 'vibrant/muted' | 'vibrant/dark_vibrant' | 'vibrant/dark_muted' | 'vibrant/light_vibrant' | 'vibrant/light_muted'
+
+type ColorProp = 'r' | 'g' | 'b' | 'h' | 's' | 'l';
+
+export const colorAlgos: { [key in ColorAlgo]: (img: Store.Image) => Store.Color } = {
+    'colorthief/color': img => img.colorthief.color,
+    'colorthief_palette/1': img => img.colorthief.palette[0],
+    'colorthief_palette/2': img => img.colorthief.palette[1],
+    'colorthief_palette/3': img => img.colorthief.palette[2],
+    'colorthief_palette/4': img => img.colorthief.palette[3],
+    'colorthief_palette/5': img => img.colorthief.palette[4],
+    'colorthief_palette/6': img => img.colorthief.palette[5],
+    'vibrant/vibrant': img => img.vibrant.vibrant,
+    'vibrant/muted': img => img.vibrant.muted,
+    'vibrant/dark_vibrant': img => img.vibrant.darkVibrant,
+    'vibrant/dark_muted': img => img.vibrant.darkMuted,
+    'vibrant/light_vibrant': img => img.vibrant.lightVibrant,
+    'vibrant/light_muted': img => img.vibrant.lightMuted,
+}
+
+export interface NoiseGridConfig {
+    gridSize: { x: number; y: number };
+    tileSize: number;
+    border?: number;
+    noiseGrid: number[][];
+    images: Store.Image[];
+    // colorAlgo: keyof Store.ApiImagesResponse['vibrant'];
+    colorAlgo: ColorAlgo;
+    colorProp: ColorProp;
+}
+
+export function getColor(config: NoiseGridConfig, image: Store.Image): Store.Color {
+    return colorAlgos[config.colorAlgo](image);
+}
+
+export class NoiseGrid {
+    readonly imagesGrid: Store.Image[][];
+
+    constructor(readonly config: NoiseGridConfig) {
+        this.imagesGrid = assignToGrid({
+            grid: config.noiseGrid,
+            list: config.images,
+            // sortBy: img => img.vibrant[config.colorMode].r,
+            sortBy: img => getColor(config, img)[config.colorProp],
+        }).grid;
+    }
 }

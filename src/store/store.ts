@@ -145,6 +145,10 @@ export class Color {
     }
 }
 
+export function getImageUrl(projectName: string, imagePath: string) {
+    return `http://localhost:3110/assets/${projectName}${imagePath}`;
+}
+
 export class Image {
     readonly imagePath: string;
     readonly colorthief: {
@@ -167,6 +171,6 @@ export class Image {
     }
 
     get imageUrl() {
-        return `http://localhost:3110/assets/${this.projectName}${this.imagePath}`;
+        return getImageUrl(this.projectName, this.imagePath);
     }
 }
